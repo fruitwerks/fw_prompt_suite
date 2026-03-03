@@ -10,6 +10,8 @@ This is my first public release. I wrote my first software in 1986 on a Commodor
 
 Check the assets folder for example workflows. Add some string nodes to the muxers and wire those to the prompt director inputs. Name your string nodes accordingly, as this is the dropdown label. 
 
+![workflow preview](assets/prompt_director.png)
+
 ---
 
 ## Nodes
