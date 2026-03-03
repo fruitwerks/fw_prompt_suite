@@ -1,8 +1,14 @@
 # FW Prompt Suite
-### by FruitWerks
+### by Fruitwerks
 
 Natural language prompt composition and latent routing for ComfyUI.  
 We are done with tag salad, or not! 
+
+I designed this to help me create rich prompts for my workflows. Copy/pasting or digging for an image to find that one detail is tedious. Now you acn have all your favorite things ready to go. Using my audio engineering experince I applied some fundamentals of signal flow to this node suite. I feel this fills a gap in the ComfyUI ecosystem and I hope you enjoy it. It is focused on natural language prompting, but you can use tags or combine it with other nodes that may fit your needs. 
+
+This is my first public release. I wrote my first software in 1986 on a Commodore 64. 
+
+Check the assets folder for example workflows. Add some string nodes to the muxers and wire those to the prompt director inputs. Name your string nodes accordingly, as this is the dropdown label. 
 
 ---
 
