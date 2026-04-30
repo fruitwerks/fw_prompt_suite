@@ -4,6 +4,8 @@
 Natural language prompt composition and latent routing for ComfyUI.  
 Built for people past the tag salad era.
 
+![workflow preview](assets/prompt_director.png)
+
 ---
 
 ## Nodes
