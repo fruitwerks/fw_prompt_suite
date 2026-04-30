@@ -69,6 +69,9 @@ class BaseSelector:
     FUNCTION = "select"
 
     def select(self, data_list, selected_slot="input_1"):
+        if selected_slot == "__disabled__":
+            return (self.EMPTY_VALUE,)
+
         slots = data_list.get("slots", []) if data_list else []
         if not slots:
             return (self.EMPTY_VALUE,)

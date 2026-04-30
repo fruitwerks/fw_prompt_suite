@@ -5,4 +5,4 @@
 import { createMuxerExtension, createSelectorExtension } from "./fw_shared.js";
 
 createMuxerExtension("LatentMuxer", "LatentDirector", "LATENT");
-createSelectorExtension("LatentDirector", "data_list", "Latent");
+createSelectorExtension("LatentDirector", "data_list", "Latent", { noDisable: true });

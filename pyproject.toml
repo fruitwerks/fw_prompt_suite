@@ -1,7 +1,7 @@
 [project]
 name = "fw-prompt-suite"
-version = "1.0.0"
-description = "Natural language prompt composition and latent routing for ComfyUI — by FruitWerks"
+version = "2.2"
+description = "Natural language prompt composition and latent routing for ComfyUI — by fruitwerks"
 license = {text = "GPL-3.0-or-later"}
 
 [project.urls]
@@ -11,3 +11,6 @@ Repository = "https://github.com/fruitwerks/fw-prompt-suite"
 PublisherId = "fruitwerks"
 DisplayName = "FW Prompt Suite"
 Icon = ""
+
+[tool.fruitwerks]
+build_date = "2026-03-27T00:42:24-05:00"

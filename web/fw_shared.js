@@ -6,6 +6,9 @@
 
 import { app } from "../../scripts/app.js";
 
+const DISABLED_VALUE = "__disabled__";
+const DISABLED_LABEL = "- Disabled -";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared: get source node title from a connected input slot
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,8 +113,24 @@ export function createMuxerExtension(nodeTypeName, notifyTypeName, inputType) {
             const origConfigure = nodeType.prototype.onConfigure;
             nodeType.prototype.onConfigure = function (data) {
                 origConfigure?.apply(this, arguments);
-                if (data.slot_counter !== undefined) this._slotCounter = data.slot_counter;
-                setTimeout(() => this._ensureOpenSlot(), 100);
+                // Derive counter from actual highest slot number present,
+                // not just saved value — prevents collision on reload + new additions
+                if (this.inputs) {
+                    const nums = this.inputs
+                        .filter(i => i.name.startsWith("input_"))
+                        .map(i => parseInt(i.name.split("_")[1]))
+                        .filter(n => !isNaN(n));
+                    const maxExisting = nums.length ? Math.max(...nums) : 1;
+                    this._slotCounter = Math.max(data.slot_counter ?? 1, maxExisting);
+                } else {
+                    if (data.slot_counter !== undefined) this._slotCounter = data.slot_counter;
+                }
+                // Guard pruning during reload — links not fully restored yet
+                this._configuring = true;
+                setTimeout(() => {
+                    this._configuring = false;
+                    this._ensureOpenSlot();
+                }, 500);
             };
 
             const origSerialize = nodeType.prototype.onSerialize;
@@ -141,6 +160,7 @@ export function createMuxerExtension(nodeTypeName, notifyTypeName, inputType) {
             };
 
             nodeType.prototype._pruneEmptySlots = function () {
+                if (this._configuring) return; // never prune during reload
                 if (!this.inputs) return;
                 const inputSlots = this.inputs
                     .map((inp, i) => ({ inp, i }))
@@ -161,6 +181,22 @@ export function createMuxerExtension(nodeTypeName, notifyTypeName, inputType) {
 
             // Lightweight rename polling
             nodeType.prototype.onDrawForeground = function (ctx) {
+                if (this.inputs) {
+                    for (let i = 0; i < this.inputs.length; i++) {
+                        const inp = this.inputs[i];
+                        if (inp.name.startsWith("input_")) {
+                            if (inp.link != null) {
+                                const title = getSourceTitle(this, i);
+                                if (title && inp.label !== title) {
+                                    inp.label = title;
+                                }
+                            } else if (inp.label !== undefined) {
+                                delete inp.label;
+                            }
+                        }
+                    }
+                }
+
                 const snap = getMuxerSlots(this).map(s => s.label).join("|");
                 if (snap !== this._lastSnap) {
                     this._lastSnap = snap;
@@ -179,7 +215,8 @@ export function createMuxerExtension(nodeTypeName, notifyTypeName, inputType) {
 // listInputName : string  e.g. "data_list"
 // widgetLabel   : string  e.g. "Latent"
 // ─────────────────────────────────────────────────────────────────────────────
-export function createSelectorExtension(nodeTypeName, listInputName, widgetLabel) {
+export function createSelectorExtension(nodeTypeName, listInputName, widgetLabel, opts = {}) {
+    const noDisable = opts.noDisable ?? false;
     app.registerExtension({
         name: `FruitWerks.${nodeTypeName}`,
 
@@ -199,7 +236,7 @@ export function createSelectorExtension(nodeTypeName, listInputName, widgetLabel
                 origConfigure?.apply(this, arguments);
                 if (!this._fw) this._fw = { selectedLabel: null, selectedSlot: "input_1" };
                 if (data.fw_label !== undefined) this._fw.selectedLabel = data.fw_label;
-                if (data.fw_slot  !== undefined) this._fw.selectedSlot  = data.fw_slot;
+                if (data.fw_slot !== undefined) this._fw.selectedSlot = data.fw_slot;
                 hideWidget(this, "selected_slot");
                 setTimeout(() => {
                     this._buildDropdown();
@@ -211,7 +248,7 @@ export function createSelectorExtension(nodeTypeName, listInputName, widgetLabel
             nodeType.prototype.onSerialize = function (data) {
                 origSerialize?.apply(this, arguments);
                 data.fw_label = this._fw?.selectedLabel;
-                data.fw_slot  = this._fw?.selectedSlot;
+                data.fw_slot = this._fw?.selectedSlot;
             };
 
             const origConnChange = nodeType.prototype.onConnectionsChange;
@@ -229,11 +266,17 @@ export function createSelectorExtension(nodeTypeName, listInputName, widgetLabel
                 const dd = this.addWidget(
                     "combo", `_fw_${nodeTypeName}`, "",
                     (value) => {
+                        if (value === DISABLED_LABEL) {
+                            self._fw.selectedLabel = DISABLED_LABEL;
+                            self._fw.selectedSlot = DISABLED_VALUE;
+                            syncHidden(self, "selected_slot", DISABLED_VALUE);
+                            return;
+                        }
                         const slots = getMuxerSlotsViaInput(self, listInputName);
                         const match = slots.find(s => s.label === value);
                         if (match) {
                             self._fw.selectedLabel = match.label;
-                            self._fw.selectedSlot  = match.slot_name;
+                            self._fw.selectedSlot = match.slot_name;
                             syncHidden(self, "selected_slot", match.slot_name);
                         }
                     },
@@ -256,21 +299,32 @@ export function createSelectorExtension(nodeTypeName, listInputName, widgetLabel
                     return;
                 }
 
-                const labels = slots.map(s => s.label);
+                // Prepend Disabled unless noDisable flag set
+                const labels = noDisable
+                    ? slots.map(s => s.label)
+                    : [DISABLED_LABEL, ...slots.map(s => s.label)];
                 this._fwDropdownWidget.options.values = labels;
 
                 if (restoreSelection && this._fw?.selectedLabel) {
+                    // Restore disabled state
+                    if (this._fw.selectedSlot === DISABLED_VALUE) {
+                        this._fwDropdownWidget.value = DISABLED_LABEL;
+                        syncHidden(this, "selected_slot", DISABLED_VALUE);
+                        this.setDirtyCanvas(true, true);
+                        return;
+                    }
                     let resolved = slots.find(s => s.label === this._fw.selectedLabel);
                     if (!resolved) resolved = slots.find(s => s.slot_name === this._fw.selectedSlot);
                     if (!resolved) resolved = slots[0];
                     this._fw.selectedLabel = resolved.label;
-                    this._fw.selectedSlot  = resolved.slot_name;
+                    this._fw.selectedSlot = resolved.slot_name;
                     this._fwDropdownWidget.value = resolved.label;
                     syncHidden(this, "selected_slot", resolved.slot_name);
                 } else if (!labels.includes(this._fwDropdownWidget.value)) {
-                    this._fwDropdownWidget.value = labels[0];
+                    // Default to first real slot
+                    this._fwDropdownWidget.value = slots[0].label;
                     this._fw.selectedLabel = slots[0].label;
-                    this._fw.selectedSlot  = slots[0].slot_name;
+                    this._fw.selectedSlot = slots[0].slot_name;
                     syncHidden(this, "selected_slot", slots[0].slot_name);
                 }
 
